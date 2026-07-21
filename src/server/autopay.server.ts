@@ -45,9 +45,11 @@ export async function executarPagamentoDiario(): Promise<{
 let started = false;
 
 function getBrasiliaDateParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-US", {
+  // hourCycle: 'h23' garante 00..23 (evita bug do V8 que retorna "24"
+  // à meia-noite quando se usa hour12:false, disparando o autopay duas vezes).
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
-    hour12: false,
+    hourCycle: "h23",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -55,11 +57,12 @@ function getBrasiliaDateParts(date = new Date()) {
     minute: "2-digit",
   }).formatToParts(date);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const hourRaw = parseInt(get("hour"), 10);
   return {
     year: get("year"),
     month: get("month"),
     day: get("day"),
-    hour: parseInt(get("hour"), 10),
+    hour: hourRaw === 24 ? 0 : hourRaw,
     minute: parseInt(get("minute"), 10),
   };
 }
