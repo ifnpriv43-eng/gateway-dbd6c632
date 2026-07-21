@@ -102,8 +102,28 @@ const ajusteSchema = z.object({
   id: z.string().min(1),
   tipo: z.enum(["credito", "debito"]),
   amount: z.number().positive().max(1000000),
-  motivo: z.string().trim().min(2).max(200),
+  motivo: z.string().trim().max(200).optional().default(""),
 });
+
+export const saldoFuncionario = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) => z.object({ id: z.string().min(1) }).parse(raw))
+  .handler(async ({ data }) => {
+    await requireAdmin();
+    const list = await db.listTransactionsForEmployee(data.id);
+    const recebido = list
+      .filter(
+        (t) =>
+          (t.kind === "pagamento_funcionario" || t.kind === "deposito") &&
+          t.status === "pago",
+      )
+      .reduce((a, b) => a + b.amount, 0);
+    const sacado = list
+      .filter(
+        (t) => t.kind === "saque" && (t.status === "pago" || t.status === "pendente"),
+      )
+      .reduce((a, b) => a + b.amount, 0);
+    return { recebido, sacado, disponivel: Math.max(0, recebido - sacado) };
+  });
 
 // Ajuste manual de saldo: admin credita ou debita a conta do funcionário/cliente.
 // Crédito → pagamento_funcionario pago (entra em "Recebido").

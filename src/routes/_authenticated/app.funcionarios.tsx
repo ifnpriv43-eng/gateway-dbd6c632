@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   listarFuncionarios, criarFuncionario, atualizarFuncionario,
   excluirFuncionario, pagarTodos, obterAutoPay, salvarAutoPay,
-  ajustarSaldoFuncionario,
+  ajustarSaldoFuncionario, saldoFuncionario,
 } from "@/lib/employees.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -280,6 +280,11 @@ function EditEmployeeDialog({ employee, open, onOpenChange }: { employee: { id: 
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); onOpenChange(false); toast.success("Salvo"); },
   });
+  const saldo = useQuery({
+    queryKey: ["saldo", employee.id],
+    queryFn: () => saldoFuncionario({ data: { id: employee.id } }),
+    enabled: open,
+  });
   const aplicarAjuste = useMutation({
     mutationFn: () => ajustarSaldoFuncionario({
       data: {
@@ -299,8 +304,7 @@ function EditEmployeeDialog({ employee, open, onOpenChange }: { employee: { id: 
   });
   const podeAjustar =
     !aplicarAjuste.isPending &&
-    parseFloat(ajuste.amount) > 0 &&
-    ajuste.motivo.trim().length >= 2;
+    parseFloat(ajuste.amount) > 0;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -320,16 +324,22 @@ function EditEmployeeDialog({ employee, open, onOpenChange }: { employee: { id: 
             <h3 className="font-semibold text-sm">Ajuste manual de saldo</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Credita ou debita na hora. Aparece no extrato do usuário.</p>
           </div>
+          <div className="rounded-md border bg-muted/30 p-3 grid grid-cols-3 gap-2 text-center">
+            <div><div className="text-[10px] uppercase text-muted-foreground">Recebido</div><div className="font-mono text-sm">{saldo.data ? brl(saldo.data.recebido) : "—"}</div></div>
+            <div><div className="text-[10px] uppercase text-muted-foreground">Sacado</div><div className="font-mono text-sm">{saldo.data ? brl(saldo.data.sacado) : "—"}</div></div>
+            <div><div className="text-[10px] uppercase text-muted-foreground">Disponível</div><div className="font-mono text-sm font-semibold text-primary">{saldo.data ? brl(saldo.data.disponivel) : "—"}</div></div>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <Button type="button" size="sm" variant={ajuste.tipo === "credito" ? "default" : "outline"} className={ajuste.tipo === "credito" ? "gradient-primary text-primary-foreground" : ""} onClick={() => setAjuste({ ...ajuste, tipo: "credito" })}>Crédito (+)</Button>
             <Button type="button" size="sm" variant={ajuste.tipo === "debito" ? "default" : "outline"} className={ajuste.tipo === "debito" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""} onClick={() => setAjuste({ ...ajuste, tipo: "debito" })}>Débito (−)</Button>
           </div>
           <div className="space-y-1.5"><Label>Valor (R$)</Label><Input type="number" step="0.01" min="0" value={ajuste.amount} onChange={(e) => setAjuste({ ...ajuste, amount: e.target.value })} placeholder="0,00" /></div>
-          <div className="space-y-1.5"><Label>Motivo</Label><Input value={ajuste.motivo} onChange={(e) => setAjuste({ ...ajuste, motivo: e.target.value })} placeholder="Ex.: bônus, correção, estorno" maxLength={200} /></div>
+          <div className="space-y-1.5"><Label>Motivo <span className="text-xs text-muted-foreground">(opcional)</span></Label><Input value={ajuste.motivo} onChange={(e) => setAjuste({ ...ajuste, motivo: e.target.value })} placeholder="Ex.: bônus, correção, estorno" maxLength={200} /></div>
           <Button type="button" onClick={() => aplicarAjuste.mutate()} disabled={!podeAjustar} className="w-full" variant={ajuste.tipo === "debito" ? "destructive" : "default"}>
             {aplicarAjuste.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Aplicar ${ajuste.tipo === "credito" ? "crédito" : "débito"}`}
           </Button>
         </div>
+
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
