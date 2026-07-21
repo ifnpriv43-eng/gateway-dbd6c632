@@ -2,6 +2,10 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { startAutoPayScheduler } from "./server/autopay.server";
+
+// Cron in-process: dispara pagamentos diários quando o horário configurado bate.
+startAutoPayScheduler();
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
