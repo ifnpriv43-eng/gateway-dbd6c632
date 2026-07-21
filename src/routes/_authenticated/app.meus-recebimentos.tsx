@@ -146,11 +146,14 @@ function MeusRecebimentosPage() {
         <Card className="p-5">
           <div className="text-xs uppercase text-muted-foreground flex items-center gap-2"><Clock className="h-3.5 w-3.5" /> A receber</div>
           <div className="mt-3 text-2xl font-bold font-display">{brl(saldo.data?.pendente ?? 0)}</div>
-          {saldo.data?.autoPay?.enabled && (saldo.data.diariaAReceber || saldo.data.diariaAmanha) ? (
+          {(saldo.data?.diariaAReceber || saldo.data?.diariaAmanha) ? (
             <div className="mt-2 text-[11px] text-muted-foreground">
-              {saldo.data.jaPagoHoje
-                ? `Próxima diária amanhã às ${String(saldo.data.autoPay.hour).padStart(2, "0")}:${String(saldo.data.autoPay.minute).padStart(2, "0")}`
-                : `Diária de hoje cai às ${String(saldo.data.autoPay.hour).padStart(2, "0")}:${String(saldo.data.autoPay.minute).padStart(2, "0")}`}
+              Diária do suporte: <span className="font-semibold text-foreground">{brl((saldo.data?.diariaAReceber ?? 0) + (saldo.data?.diariaAmanha ?? 0))}</span>
+              {saldo.data?.autoPay?.enabled ? (
+                <> • {saldo.data.jaPagoHoje
+                  ? `próxima amanhã às ${String(saldo.data.autoPay.hour).padStart(2, "0")}:${String(saldo.data.autoPay.minute).padStart(2, "0")}`
+                  : `hoje às ${String(saldo.data.autoPay.hour).padStart(2, "0")}:${String(saldo.data.autoPay.minute).padStart(2, "0")}`}</>
+              ) : null}
             </div>
           ) : null}
           {saldo.data && !saldo.data.hasPixKey && (saldo.data.diariaAReceber || saldo.data.diariaAmanha) ? (
