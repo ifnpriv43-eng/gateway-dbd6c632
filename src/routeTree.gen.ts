@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
 import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticated/app.index'
+import { Route as ApiPublicDeployHookRouteImport } from './routes/api/public/deploy-hook'
 import { Route as AuthenticatedAppSaquesRouteImport } from './routes/_authenticated/app.saques'
 import { Route as AuthenticatedAppMeusRecebimentosRouteImport } from './routes/_authenticated/app.meus-recebimentos'
 import { Route as AuthenticatedAppHistoricoRouteImport } from './routes/_authenticated/app.historico'
@@ -52,6 +53,11 @@ const AuthenticatedAppIndexRoute = AuthenticatedAppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedAppRoute,
+} as any)
+const ApiPublicDeployHookRoute = ApiPublicDeployHookRouteImport.update({
+  id: '/api/public/deploy-hook',
+  path: '/api/public/deploy-hook',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAppSaquesRoute = AuthenticatedAppSaquesRouteImport.update({
   id: '/saques',
@@ -139,6 +145,7 @@ export interface FileRoutesByFullPath {
   '/app/historico': typeof AuthenticatedAppHistoricoRoute
   '/app/meus-recebimentos': typeof AuthenticatedAppMeusRecebimentosRoute
   '/app/saques': typeof AuthenticatedAppSaquesRoute
+  '/api/public/deploy-hook': typeof ApiPublicDeployHookRoute
   '/app/': typeof AuthenticatedAppIndexRoute
   '/api/public/evopay/webhook': typeof ApiPublicEvopayWebhookRoute
   '/api/public/v1/balance': typeof ApiPublicV1BalanceRoute
@@ -158,6 +165,7 @@ export interface FileRoutesByTo {
   '/app/historico': typeof AuthenticatedAppHistoricoRoute
   '/app/meus-recebimentos': typeof AuthenticatedAppMeusRecebimentosRoute
   '/app/saques': typeof AuthenticatedAppSaquesRoute
+  '/api/public/deploy-hook': typeof ApiPublicDeployHookRoute
   '/app': typeof AuthenticatedAppIndexRoute
   '/api/public/evopay/webhook': typeof ApiPublicEvopayWebhookRoute
   '/api/public/v1/balance': typeof ApiPublicV1BalanceRoute
@@ -180,6 +188,7 @@ export interface FileRoutesById {
   '/_authenticated/app/historico': typeof AuthenticatedAppHistoricoRoute
   '/_authenticated/app/meus-recebimentos': typeof AuthenticatedAppMeusRecebimentosRoute
   '/_authenticated/app/saques': typeof AuthenticatedAppSaquesRoute
+  '/api/public/deploy-hook': typeof ApiPublicDeployHookRoute
   '/_authenticated/app/': typeof AuthenticatedAppIndexRoute
   '/api/public/evopay/webhook': typeof ApiPublicEvopayWebhookRoute
   '/api/public/v1/balance': typeof ApiPublicV1BalanceRoute
@@ -202,6 +211,7 @@ export interface FileRouteTypes {
     | '/app/historico'
     | '/app/meus-recebimentos'
     | '/app/saques'
+    | '/api/public/deploy-hook'
     | '/app/'
     | '/api/public/evopay/webhook'
     | '/api/public/v1/balance'
@@ -221,6 +231,7 @@ export interface FileRouteTypes {
     | '/app/historico'
     | '/app/meus-recebimentos'
     | '/app/saques'
+    | '/api/public/deploy-hook'
     | '/app'
     | '/api/public/evopay/webhook'
     | '/api/public/v1/balance'
@@ -242,6 +253,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/historico'
     | '/_authenticated/app/meus-recebimentos'
     | '/_authenticated/app/saques'
+    | '/api/public/deploy-hook'
     | '/_authenticated/app/'
     | '/api/public/evopay/webhook'
     | '/api/public/v1/balance'
@@ -257,6 +269,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ApiPublicDeployHookRoute: typeof ApiPublicDeployHookRoute
   ApiPublicEvopayWebhookRoute: typeof ApiPublicEvopayWebhookRoute
   ApiPublicV1BalanceRoute: typeof ApiPublicV1BalanceRoute
   ApiPublicV1PixRoute: typeof ApiPublicV1PixRouteWithChildren
@@ -300,6 +313,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/'
       preLoaderRoute: typeof AuthenticatedAppIndexRouteImport
       parentRoute: typeof AuthenticatedAppRoute
+    }
+    '/api/public/deploy-hook': {
+      id: '/api/public/deploy-hook'
+      path: '/api/public/deploy-hook'
+      fullPath: '/api/public/deploy-hook'
+      preLoaderRoute: typeof ApiPublicDeployHookRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/app/saques': {
       id: '/_authenticated/app/saques'
@@ -465,6 +485,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   LoginRoute: LoginRoute,
+  ApiPublicDeployHookRoute: ApiPublicDeployHookRoute,
   ApiPublicEvopayWebhookRoute: ApiPublicEvopayWebhookRoute,
   ApiPublicV1BalanceRoute: ApiPublicV1BalanceRoute,
   ApiPublicV1PixRoute: ApiPublicV1PixRouteWithChildren,
