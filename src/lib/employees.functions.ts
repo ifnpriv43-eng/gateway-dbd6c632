@@ -109,7 +109,7 @@ export const saldoFuncionario = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) => z.object({ id: z.string().min(1) }).parse(raw))
   .handler(async ({ data }) => {
     await requireAdmin();
-    const list = await db.n(data.id);
+    const list = await db.listTransactionsForEmployee(data.id);
     const recebido = list
       .filter(
         (t) =>
