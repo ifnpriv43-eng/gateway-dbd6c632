@@ -193,19 +193,30 @@ export const meuSaldoFuncionario = createServerFn({ method: "GET" }).handler(asy
     }),
   );
   const list = synced;
-  const hojeBrasilia = new Intl.DateTimeFormat("en-CA", {
+  const nowBrasiliaParts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date());
-  const temDiariaHoje = list.some(
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+  const partMap: Record<string, string> = {};
+  for (const p of nowBrasiliaParts) partMap[p.type] = p.value;
+  const hojeBrasilia = `${partMap.year}-${partMap.month}-${partMap.day}`;
+  const nowMinutes = parseInt(partMap.hour, 10) * 60 + parseInt(partMap.minute, 10);
+  const cfg = await db.getAutoPay();
+  const scheduledMinutes = cfg.hour * 60 + cfg.minute;
+  const pagoHojeReal = list.some(
     (t) =>
       t.kind === "pagamento_funcionario" &&
       (t.status === "pago" || t.status === "pendente") &&
       (t.paidAt ?? t.createdAt).slice(0, 10) === hojeBrasilia,
   );
-  const cfg = await db.getAutoPay();
+  // Próxima é AMANHÃ apenas se o horário de hoje já passou E já houve pagamento hoje.
+  // Se o horário de hoje ainda não chegou, próxima é HOJE (mesmo que exista registro antigo do dia).
+  const temDiariaHoje = pagoHojeReal && nowMinutes >= scheduledMinutes;
   const diariaAReceber =
     user?.role === "funcionario" && user.active && !temDiariaHoje ? Math.max(0, user.dailyAmount ?? 0) : 0;
   const diariaAmanha =
