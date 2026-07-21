@@ -257,7 +257,7 @@ function NewEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   );
 }
 
-function EditEmployeeDialog({ employee, open, onOpenChange }: { employee: { id: string; name: string; pixKey?: string; dailyAmount?: number; active: boolean }; open: boolean; onOpenChange: (v: boolean) => void }) {
+function EditEmployeeDialog({ employee, open, onOpenChange }: { employee: { id: string; name: string; role?: string; pixKey?: string; dailyAmount?: number; active: boolean }; open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient();
   const [f, setF] = useState({
     name: employee.name,
@@ -266,6 +266,7 @@ function EditEmployeeDialog({ employee, open, onOpenChange }: { employee: { id: 
     active: employee.active,
     password: "",
   });
+  const [ajuste, setAjuste] = useState({ tipo: "credito" as "credito" | "debito", amount: "", motivo: "" });
   const save = useMutation({
     mutationFn: () => atualizarFuncionario({
       data: {
@@ -279,17 +280,57 @@ function EditEmployeeDialog({ employee, open, onOpenChange }: { employee: { id: 
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); onOpenChange(false); toast.success("Salvo"); },
   });
+  const aplicarAjuste = useMutation({
+    mutationFn: () => ajustarSaldoFuncionario({
+      data: {
+        id: employee.id,
+        tipo: ajuste.tipo,
+        amount: parseFloat(ajuste.amount) || 0,
+        motivo: ajuste.motivo.trim(),
+      },
+    }),
+    onSuccess: (r) => {
+      if (!r.ok) { toast.error(r.error); return; }
+      qc.invalidateQueries();
+      setAjuste({ tipo: "credito", amount: "", motivo: "" });
+      toast.success(`Ajuste aplicado em ${employee.name}`);
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const podeAjustar =
+    !aplicarAjuste.isPending &&
+    parseFloat(ajuste.amount) > 0 &&
+    ajuste.motivo.trim().length >= 2;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Editar {employee.name}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5"><Label>Nome</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
           <div className="space-y-1.5"><Label>Chave Pix</Label><Input value={f.pixKey} onChange={(e) => setF({ ...f, pixKey: e.target.value })} /></div>
-          <div className="space-y-1.5"><Label>Valor diário (R$)</Label><Input type="number" step="0.01" value={f.dailyAmount} onChange={(e) => setF({ ...f, dailyAmount: e.target.value })} /></div>
+          {employee.role !== "cliente" && (
+            <div className="space-y-1.5"><Label>Valor diário (R$)</Label><Input type="number" step="0.01" value={f.dailyAmount} onChange={(e) => setF({ ...f, dailyAmount: e.target.value })} /></div>
+          )}
           <div className="space-y-1.5"><Label>Nova senha (opcional)</Label><Input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></div>
           <div className="flex items-center gap-2"><Switch checked={f.active} onCheckedChange={(v) => setF({ ...f, active: v })} /><Label>Ativo</Label></div>
         </div>
+
+        <div className="mt-2 border-t pt-4 space-y-3">
+          <div>
+            <h3 className="font-semibold text-sm">Ajuste manual de saldo</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Credita ou debita na hora. Aparece no extrato do usuário.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" size="sm" variant={ajuste.tipo === "credito" ? "default" : "outline"} className={ajuste.tipo === "credito" ? "gradient-primary text-primary-foreground" : ""} onClick={() => setAjuste({ ...ajuste, tipo: "credito" })}>Crédito (+)</Button>
+            <Button type="button" size="sm" variant={ajuste.tipo === "debito" ? "default" : "outline"} className={ajuste.tipo === "debito" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""} onClick={() => setAjuste({ ...ajuste, tipo: "debito" })}>Débito (−)</Button>
+          </div>
+          <div className="space-y-1.5"><Label>Valor (R$)</Label><Input type="number" step="0.01" min="0" value={ajuste.amount} onChange={(e) => setAjuste({ ...ajuste, amount: e.target.value })} placeholder="0,00" /></div>
+          <div className="space-y-1.5"><Label>Motivo</Label><Input value={ajuste.motivo} onChange={(e) => setAjuste({ ...ajuste, motivo: e.target.value })} placeholder="Ex.: bônus, correção, estorno" maxLength={200} /></div>
+          <Button type="button" onClick={() => aplicarAjuste.mutate()} disabled={!podeAjustar} className="w-full" variant={ajuste.tipo === "debito" ? "destructive" : "default"}>
+            {aplicarAjuste.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Aplicar ${ajuste.tipo === "credito" ? "crédito" : "débito"}`}
+          </Button>
+        </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={() => save.mutate()} disabled={save.isPending} className="gradient-primary text-primary-foreground">
