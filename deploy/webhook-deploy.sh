@@ -21,7 +21,7 @@ cd "$REPO_DIR" || { log "FAIL: dir $REPO_DIR não existe"; exit 1; }
 {
   git fetch origin "$BRANCH" && \
   git reset --hard "origin/$BRANCH" && \
-  bun install --production=false && \
+  bun install && \
   bun run build:vps && \
   pm2 restart "$PM2_NAME" --update-env
 } >> "$LOG_FILE" 2>&1
