@@ -163,17 +163,33 @@ export const meuSaldoFuncionario = createServerFn({ method: "GET" }).handler(asy
   const s = await requireSession();
   const user = await db.getUserById(s.userId!);
   const rawList = await db.listTransactionsForEmployee(s.userId!);
+  const EXPIRE_MS = 60 * 60 * 1000; // 1h — expira depósito pendente antigo
+  const now = Date.now();
   const synced = await Promise.all(
     rawList.map(async (t) => {
-      if (t.status !== "pendente" || !t.externalId || (t.kind !== "saque" && t.kind !== "pagamento_funcionario")) return t;
-      const remote = await getWithdrawStatus(t.externalId);
-      if (!remote || remote.status === t.status) return t;
-      return (
-        (await db.updateTransaction(t.id, {
-          status: remote.status,
-          paidAt: remote.status === "pago" ? remote.paidAt ?? new Date().toISOString() : t.paidAt,
-        })) ?? t
-      );
+      if (t.status !== "pendente") return t;
+      if (t.externalId) {
+        try {
+          const remote =
+            t.kind === "deposito"
+              ? await getPixStatus(t.externalId)
+              : await getWithdrawStatus(t.externalId);
+          if (remote && remote.status !== t.status) {
+            return (
+              (await db.updateTransaction(t.id, {
+                status: remote.status,
+                paidAt: remote.status === "pago" ? remote.paidAt ?? new Date().toISOString() : t.paidAt,
+              })) ?? t
+            );
+          }
+        } catch {
+          // ignora falha de rede — cai no auto-expire abaixo
+        }
+      }
+      if (t.kind === "deposito" && now - new Date(t.createdAt).getTime() > EXPIRE_MS) {
+        return (await db.updateTransaction(t.id, { status: "expirado" })) ?? t;
+      }
+      return t;
     }),
   );
   const list = synced;
@@ -205,7 +221,7 @@ export const meuSaldoFuncionario = createServerFn({ method: "GET" }).handler(asy
     .reduce((a, b) => a + b.amount, 0);
   return {
     recebido,
-    pendente: pendente + diariaAReceber + diariaAmanha,
+    pendente, // apenas cobranças/pagamentos pendentes — NÃO inclui diária futura
     sacado,
     disponivel: Math.max(0, recebido - sacado),
     diariaAReceber,
