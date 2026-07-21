@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   listarFuncionarios, criarFuncionario, atualizarFuncionario,
   excluirFuncionario, pagarTodos, obterAutoPay, salvarAutoPay,
-  ajustarSaldoFuncionario,
+  ajustarSaldoFuncionario, saldoFuncionario,
 } from "@/lib/employees.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
