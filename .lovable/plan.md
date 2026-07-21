@@ -1,91 +1,58 @@
-# Plano: Ajuste manual de saldo + Deploy automático via webhook
+# API própria + documentação por usuário
 
-## Parte 1 — Editar valores das contas (Funcionários & Clientes)
+Cada cliente/funcionário ganha um **token pessoal** (`pk_...`) e uma **página de documentação** dentro do dashboard. Quando ele integra no sistema dele, os depósitos gerados caem no **saldo interno dele** (não no meu saldo global). Por trás, tudo passa pela minha conta EvoPay usando meu token master — ele nunca vê meu token.
 
-Vou adicionar ao modal **Editar** da tela `/app/funcionarios` uma seção nova: **Ajuste manual de saldo**. O admin poderá:
+## 1. Tokens de API pessoais
 
-- **Creditar R$ X** na conta do funcionário/cliente (aumenta o "Disponível pra sacar")
-- **Debitar R$ X** (diminui o "Disponível pra sacar")
-- Escrever um **motivo** (ex.: "bônus", "correção", "estorno")
+- Nova tabela `api_tokens` (id, user_id, token, name, active, created_at, last_used_at, revoked_at).
+- Token gerado como `pk_live_` + 32 chars aleatórios; guardado em hash SHA-256 no banco (só o dono vê o valor completo uma vez, ao criar).
+- Cada usuário pode ter vários tokens (ex: "produção", "teste"), revogar e ver a data do último uso.
 
-Isso não muda a diária automática — a diária continua sendo editada no mesmo modal como já é hoje. É um mecanismo separado, imediato.
+## 2. Endpoints públicos (`/api/public/v1/*`)
 
-### Como funciona por baixo dos panos
+Autenticados via header `Authorization: Bearer pk_live_...`. Todos retornam JSON:
 
-Cada ajuste vira uma **transação** normal no extrato do usuário (aparece no Histórico e no "Extrato" da tela dele) com descrição `Ajuste manual: <motivo>`:
+| Método | Rota | O que faz |
+|---|---|---|
+| `GET`  | `/api/public/v1/balance` | Saldo interno do dono do token (recebido − sacado) |
+| `POST` | `/api/public/v1/pix` | Cria depósito Pix. Body: `{ amount, description, payerName?, payerDocument? }`. Retorna `id`, `qrCode`, `qrImage`, `status`. **A transação fica marcada com `employee_id = dono do token`**, então o valor pago cai no saldo interno dele. |
+| `GET`  | `/api/public/v1/pix/:id` | Status de um depósito (sincroniza com EvoPay) |
+| `POST` | `/api/public/v1/withdraw` | Saque via chave Pix. Body: `{ amount, pixKey, keyType, description? }`. Valida saldo interno do dono antes de enviar. |
+| `POST` | `/api/public/v1/withdraw/qrcode` | Saque pagando um QR/copia‑e‑cola |
+| `GET`  | `/api/public/v1/withdraw/:id` | Status de um saque |
+| `GET`  | `/api/public/v1/transactions` | Lista transações do dono (paginado) |
+| `POST` | `/api/public/v1/webhook` | (opcional futuro) URL onde o dono recebe notificações quando um depósito é pago |
 
-- **Crédito** → cria transação `pagamento_funcionario` `pago` com o valor → entra em "Recebido" → aumenta disponível.
-- **Débito** → cria transação `saque` `pago` com o valor e sem Pix externo → entra em "Sacado" → diminui disponível.
+Todas as chamadas por trás usam o token master da EvoPay, mas o registro no banco fica com `employee_id` do dono do token → dashboard dele mostra a movimentação, saldo cresce, sacar consome desse saldo. **Igual saques feitos pelo próprio dashboard**.
 
-Vantagem: **não precisa mexer no schema do banco** (nada de migração no Postgres), aproveita toda a lógica de saldo já existente, e o funcionário vê o ajuste no extrato dele. Tudo rastreável.
+## 3. Segurança
 
-### Arquivos afetados
+- Rate limit simples por token (60 req/min, em memória por instância) — evita abuso.
+- Validação Zod em todo body.
+- Nunca retorna PII de outros usuários; token só enxerga as próprias transações.
+- Rota fica em `/api/public/*` (bypass do gate de auth do Lovable), mas o handler exige o Bearer token — sem token válido, `401`.
 
-- `src/lib/employees.functions.ts` — adicionar server fn `ajustarSaldoFuncionario({ id, tipo: "credito"|"debito", amount, motivo })`, protegida por `requireAdmin`, valida com Zod (valor > 0, motivo min 2 chars), bloqueia débito acima do disponível.
-- `src/routes/_authenticated/app.funcionarios.tsx` — no `EditEmployeeDialog`, nova seção "Ajuste de saldo" com: campo valor, radio Crédito/Débito, campo motivo, botão "Aplicar ajuste". Mostra o saldo disponível atual do usuário pra referência.
-- Nenhuma mudança no schema/migração.
+## 4. Página "Minha API" dentro do dashboard
 
-## Parte 2 — Deploy automático via Webhook do GitHub
+Nova rota `/app/api` (visível pra admin, funcionário e cliente):
 
-Fluxo final:
+- **Meus tokens**: lista com nome, últimos 4 chars, último uso, botão revogar.
+- **Criar token**: modal com nome → mostra o `pk_live_...` completo uma única vez (com botão copiar), aviso "guarde agora, não conseguimos mostrar de novo".
+- **Documentação**: seções com exemplos em cURL e JavaScript pra cada endpoint. URL base mostrada dinamicamente (`window.location.origin/api/public/v1`). Todos os exemplos já vêm com **o token do usuário logado** pré‑preenchido, pra ele testar copiando e colando.
+- Bloco final "Como funciona": explica em 2 parágrafos que os pagamentos entram automaticamente no saldo dele e podem ser sacados pelo próprio dashboard ou pela API.
 
-```text
-Lovable edita → push GitHub → GitHub chama VPS → VPS atualiza sozinha (~5s)
-```
+## 5. Arquivos que mudam
 
-### O que vou criar
+- Migração: nova tabela `api_tokens` (+ GRANTs + RLS).
+- `src/lib/api-tokens.functions.ts` — criar/listar/revogar tokens (server fns, protegidas por sessão).
+- `src/server/api-auth.ts` — helper `authenticateApiToken(request)` que resolve o token do header pro `user_id`.
+- `src/routes/api/public/v1/*.ts` — 7 rotas HTTP acima.
+- `src/routes/_authenticated/app.api.tsx` — página com tokens + documentação (usa componentes shadcn Tabs/Card + syntax highlighting simples).
+- `src/components/app-sidebar.tsx` — item "API & Docs" no menu.
 
-**Endpoint na app:** `src/routes/api/public/deploy-hook.ts` (POST)
+## Confirmação
 
-- Recebe o webhook do GitHub em `https://seu-dominio/api/public/deploy-hook`
-- Verifica assinatura HMAC-SHA256 no header `x-hub-signature-256` com `timingSafeEqual` (impede que qualquer um dispare o deploy)
-- Só aceita eventos de push na branch `main`
-- Dispara um script em background: `git pull --ff-only && bun install --production && pm2 restart evopay` (nome do processo pega do env)
-- Responde 202 imediatamente pro GitHub (não trava o webhook)
-- Segredo lido de `process.env.GITHUB_WEBHOOK_SECRET`
+Posso seguir com esse formato? Duas perguntas rápidas antes de codar:
 
-**Script auxiliar:** `deploy/webhook-deploy.sh` — o comando que a app dispara. Facilita testar/debugar via `./deploy/webhook-deploy.sh` manual.
-
-### Passos que você faz na VPS (só uma vez)
-
-1. Puxa a nova versão manualmente uma vez: `git pull`
-2. Adiciona no `.env` da VPS:
-   ```
-   GITHUB_WEBHOOK_SECRET=<uma_string_aleatoria_forte>
-   PM2_PROCESS_NAME=evopay
-   REPO_DIR=/var/www/evopay/new-repo
-   ```
-   Pra gerar a string: `openssl rand -hex 32`
-3. Dá permissão de execução: `chmod +x deploy/webhook-deploy.sh`
-4. Reinicia o pm2: `pm2 restart evopay --update-env`
-
-### Passos no GitHub (só uma vez)
-
-1. Vai no repo → **Settings → Webhooks → Add webhook**
-2. **Payload URL:** `https://SEU_DOMINIO/api/public/deploy-hook`
-3. **Content type:** `application/json`
-4. **Secret:** a mesma string do `GITHUB_WEBHOOK_SECRET`
-5. **Which events:** só o evento **push** (Just the push event)
-6. **Active:** ✅
-7. Salvar
-
-### Segurança
-
-- Endpoint público (`/api/public/*`) mas exige assinatura HMAC válida do GitHub — sem o secret ninguém dispara.
-- Compara assinatura com `timingSafeEqual` (evita timing attack).
-- Só aceita pushes na branch `main` (ignora feature branches, tags).
-- Log de cada disparo com IP e commit SHA em stdout do pm2 pra auditoria.
-- Se o `git pull` ou `bun install` falhar, o pm2 mantém a versão antiga rodando.
-
-### Observação importante
-
-O endpoint executa `child_process.spawn` na tua VPS (Node.js). Isso funciona porque o app roda em Node via pm2, não em serverless. Se um dia migrar pra Cloudflare Workers ou similar, esse fluxo não vai funcionar — mas hoje está tudo certo.
-
-## Ordem de aplicação
-
-1. Faço as duas alterações no clone local.
-2. Você aplica via `git pull` na VPS uma vez (por enquanto ainda manual, esse mesmo pull já ativa o webhook).
-3. Configura o segredo `.env` + webhook no GitHub.
-4. A partir daí, todo push da Lovable atualiza a VPS sozinho.
-
-Confirma que posso seguir?
+1. **Webhooks pro cliente** (item opcional na tabela): implemento agora ou deixo pra depois?
+2. **Taxa/comissão sua** sobre depósitos que caem via API de terceiros: quer que eu já preveja uma % configurável (ex: 2% do depósito fica com você, 98% cai no saldo do cliente)? Ou 100% pro cliente por enquanto?
